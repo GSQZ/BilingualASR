@@ -174,7 +174,7 @@ gunicorn -w 4 -b 127.0.0.1:5000 main:app
 
 MIT License
 
-Copyright (c) 2025 [GSQZ](https://github.com/GSQZ)
+Copyright (c) 2025 是青旨啊🌴
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
