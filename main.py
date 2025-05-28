@@ -250,7 +250,7 @@ class UModel(nn.Module):
                 # 确保目录存在
                 os.makedirs(os.path.dirname(self.checkpoint), exist_ok=True)
                 
-                model_url = "https://pan.sayqz.com/%E5%85%AC%E5%85%B1%E8%B5%84%E6%BA%90/%E4%BC%AACDN/assets/pt/UModel_best.pth"
+                model_url = "https://pan.sayqz.com/d/%E5%85%AC%E5%85%B1%E8%B5%84%E6%BA%90/%E4%BC%AACDN/assets/pt/UModel_best.pth"
                 download_path = self.checkpoint + '_best.pth'
                 
                 print(f"模型文件不存在，正在从{model_url}下载...")
