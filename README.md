@@ -1,7 +1,7 @@
 # BilingualASR (双语语音识别API)
 
 这是一个支持维吾尔语和中文的语音识别API，单文件实现，部署简单快捷。
-
+![01](https://github.com/GSQZ/BilingualASR/blob/main/img/01.png)
 ## 从GitHub获取项目
 
 ```bash
