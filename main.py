@@ -205,9 +205,16 @@ class UModel(nn.Module):
         self.outlayer = nn.Conv1d(1024, uyghur_latin.vocab_size, 1, 1)
         self.softMax = nn.LogSoftmax(dim=1)
 
-        self.checkpoint = 'results/UModel'
-        self._load(load_best)
-        print(f'维吾尔语模型已加载，参数量: {self.parameters_count(self):,}')
+        # 使用绝对路径存储模型路径
+        self.checkpoint = os.path.abspath(os.path.join(os.getcwd(), 'results', 'UModel'))
+        
+        # 记录模型加载状态
+        self.model_loaded = self._load(load_best)
+        
+        if self.model_loaded:
+            print(f'维吾尔语模型已成功加载，参数量: {self.parameters_count(self):,}')
+        else:
+            print(f'警告：使用未经训练的维吾尔语模型，识别结果可能不准确')
 
     def forward(self, x, input_lengths):
         inp = torch.cat([self.in1(x), self.in2(x), self.in3(x)], dim=1)
@@ -234,13 +241,43 @@ class UModel(nn.Module):
         path = None
         self.trained_epochs = 0
         self.best_cer = 1.0
-        # 优先加载最佳模型，不存在就用最新的
-        if load_best == True and os.path.exists(self.checkpoint + '_best.pth'):
-            path = self.checkpoint + '_best.pth'
-        elif os.path.exists(self.checkpoint + '_last.pth'):
-            path = self.checkpoint + '_last.pth'
         
-        # 如果本地没有模型文件，尝试从网络下载
+        # 检查模型文件是否存在，使用绝对路径并打印检查路径以便调试
+        best_path = self.checkpoint + '_best.pth'
+        last_path = self.checkpoint + '_last.pth'
+        
+        print(f"检查模型文件: {best_path} - 存在: {os.path.exists(best_path)}")
+        print(f"检查模型文件: {last_path} - 存在: {os.path.exists(last_path)}")
+        
+        # 优先加载最佳模型，不存在就用最新的
+        if load_best == True and os.path.exists(best_path):
+            path = best_path
+            print(f"将使用最佳模型: {path}")
+        elif os.path.exists(last_path):
+            path = last_path
+            print(f"将使用最新模型: {path}")
+        elif os.path.exists(best_path):  # 即使不是load_best也尝试加载best模型
+            path = best_path
+            print(f"将使用找到的最佳模型: {path}")
+        
+        # 尝试加载模型
+        if path is not None:
+            try:
+                print(f"加载模型文件: {path}")
+                pack = torch.load(path, map_location='cpu')
+                self.load_state_dict(pack['st_dict'])
+                self.trained_epochs = pack['epoch']
+                self.best_cer = pack.get('BCER', 1.0)
+                print(f'模型加载成功: {path}')
+                print(f'CER: {self.best_cer:.2%} (字错率，越低越好)')
+                print(f'训练轮次: {self.trained_epochs}')
+                return True  # 返回加载成功的状态
+            except Exception as e:
+                print(f"加载模型失败: {str(e)}")
+                print("模型文件可能损坏，尝试下载新模型")
+                path = None  # 重置路径，触发下载
+        
+        # 如果本地没有模型文件或加载失败，尝试从网络下载
         if path is None:
             try:
                 import requests
@@ -253,7 +290,7 @@ class UModel(nn.Module):
                 model_url = "https://pan.sayqz.com/d/%E5%85%AC%E5%85%B1%E8%B5%84%E6%BA%90/%E4%BC%AACDN/assets/pt/UModel_best.pth"
                 download_path = self.checkpoint + '_best.pth'
                 
-                print(f"模型文件不存在，正在从{model_url}下载...")
+                print(f"正在从{model_url}下载模型...")
                 
                 # 使用带进度条的下载
                 try:
@@ -280,19 +317,26 @@ class UModel(nn.Module):
                     print(f"模型下载完成: {download_path}")
                     path = download_path
                 
+                # 尝试加载下载的模型
+                if path is not None:
+                    try:
+                        pack = torch.load(path, map_location='cpu')
+                        self.load_state_dict(pack['st_dict'])
+                        self.trained_epochs = pack['epoch']
+                        self.best_cer = pack.get('BCER', 1.0)
+                        print(f'下载的模型加载成功: {path}')
+                        print(f'CER: {self.best_cer:.2%} (字错率，越低越好)')
+                        print(f'训练轮次: {self.trained_epochs}')
+                        return True
+                    except Exception as e:
+                        print(f"下载的模型加载失败: {str(e)}")
+                
             except Exception as e:
                 print(f"模型下载失败: {str(e)}")
                 print("请手动下载模型文件到 results/UModel_best.pth")
-                print("下载地址: https://pan.sayqz.com/%E5%85%AC%E5%85%B1%E8%B5%84%E6%BA%90/%E4%BC%AACDN/assets/pt/UModel_best.pth")
+                print("下载地址: https://pan.sayqz.com/d/%E5%85%AC%E5%85%B1%E8%B5%84%E6%BA%90/%E4%BC%AACDN/assets/pt/UModel_best.pth")
         
-        if path is not None:
-            pack = torch.load(path, map_location='cpu')
-            self.load_state_dict(pack['st_dict'])
-            self.trained_epochs = pack['epoch']
-            self.best_cer = pack.get('BCER', 1.0)
-            print(f'找到模型: {path}')
-            print(f'CER: {self.best_cer:.2%} (字错率，越低越好)')
-            print(f'训练轮次: {self.trained_epochs}')
+        return False  # 如果到这里，说明加载失败了
 
     def predict(self, path, device):
         """处理一个音频文件，返回识别文本"""
@@ -405,19 +449,39 @@ uyghur_model = UModel(featurelen)
 uyghur_model.to(device)
 
 # 初始化中文识别模型
-try:
-    print("加载中文语音识别模型中...")
-    # 先看看有没有本地模型
-    if os.path.exists('./whisper-small'):
-        whisper_model = WhisperModel("./whisper-small", device="cpu", compute_type="int8")
-    else:
-        # 没有就下载 - 网络不好的话这一步会很慢
-        whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+def init_whisper_model():
+    """初始化并返回Whisper模型，优先使用本地缓存"""
+    try:
+        print("加载中文语音识别模型中...")
+        # 创建模型缓存目录
+        whisper_cache_dir = os.path.join(os.getcwd(), "whisper-cache")
+        os.makedirs(whisper_cache_dir, exist_ok=True)
+        
+        # 首先尝试加载本地完整模型
+        local_model_dir = os.path.join(os.getcwd(), "whisper-small")
+        if os.path.exists(local_model_dir) and os.path.isdir(local_model_dir):
+            files = os.listdir(local_model_dir)
+            if len(files) > 0:
+                try:
+                    print(f"使用本地模型: {local_model_dir}")
+                    return WhisperModel(local_model_dir, device="cpu", compute_type="int8", 
+                                       download_root=whisper_cache_dir)
+                except Exception as e:
+                    print(f"本地模型加载失败: {str(e)}")
+                    
+        # 使用缓存目录加载/下载模型
+        print("从缓存或Hugging Face下载whisper模型...")
+        return WhisperModel("small", device="cpu", compute_type="int8", 
+                           download_root=whisper_cache_dir)
+    except Exception as e:
+        print(f"中文模型加载失败: {str(e)}")
+        print("只能使用维吾尔语功能了...")
+        return None
+
+# 加载中文识别模型
+whisper_model = init_whisper_model()
+if whisper_model is not None:
     print("中文模型加载完成！")
-except Exception as e:
-    print(f"中文模型加载失败: {str(e)}")
-    print("只能使用维吾尔语功能了...")
-    whisper_model = None
 
 def save_base64_audio(audio_base64):
     """保存base64音频到临时文件
