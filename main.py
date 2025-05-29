@@ -21,6 +21,7 @@ from sklearn import preprocessing
 import numpy as np
 from faster_whisper import WhisperModel
 import json
+from umsc import UgMultiScriptConverter
 
 # ---------- 基础配置 ----------
 # 音频处理参数 - 这些参数是经过反复实验调整的，别随便改
@@ -372,69 +373,11 @@ class UModel(nn.Module):
         return predstrs
 
 # ---------- 拉丁字母到阿拉伯字母转换 ----------
-class UgMultiScriptConverter:
-    """维吾尔语转换工具 - 拉丁转阿拉伯
-    
-    这个转换表很简单，实际上有更复杂的转换规则
-    不过对于API演示已经够用了
-    """
-    def __init__(self, source_script, target_script):
-        self.source_script = source_script
-        self.target_script = target_script
-        
-        # 基本转换表 - 如果有错误请告诉我
-        self.latin_to_arabic = {
-            'a': 'ئا',
-            'b': 'ب',
-            'c': 'چ',
-            'd': 'د',
-            'e': 'ە',
-            'f': 'ف',
-            'g': 'گ',
-            'h': 'ھ',
-            'i': 'ئى',
-            'j': 'ج',
-            'k': 'ك',
-            'l': 'ل',
-            'm': 'م',
-            'n': 'ن',
-            'o': 'ئو',
-            'p': 'پ',
-            'q': 'ق',
-            'r': 'ر',
-            's': 'س',
-            't': 'ت',
-            'u': 'ئۇ',
-            'v': 'ۋ',
-            'w': 'ۋ',
-            'x': 'خ',
-            'y': 'ي',
-            'z': 'ز',
-            'é': 'ې',
-            'ö': 'ۆ',
-            'ü': 'ۈ',
-            "'": 'ئ',
-            ' ': ' '
-        }
-
-    def __call__(self, text):
-        """转换函数，接收拉丁字母文本返回阿拉伯字母文本"""
-        if self.source_script == 'ULS' and self.target_script == 'UAS':
-            # 拉丁转阿拉伯
-            result = ""
-            for char in text.lower():
-                if char in self.latin_to_arabic:
-                    result += self.latin_to_arabic[char]
-                else:
-                    result += char  # 不认识的字符保留原样
-            return result
-        else:
-            # 其他转换方向还没实现
-            print(f"不支持从 {self.source_script} 到 {self.target_script} 的转换")
-            return text
-
 def latin_to_arabic(text):
-    """转换接口，让调用更简单"""
+    """转换接口，将拉丁维文转换为阿拉伯维文
+    
+    使用专业的umsc库进行维吾尔语转换，支持更准确的转换规则
+    """
     source_script = 'ULS'  # Uyghur Latin Script
     target_script = 'UAS'  # Uyghur Arabic Script
     converter = UgMultiScriptConverter(source_script, target_script)
@@ -538,10 +481,15 @@ def recognize_speech():
             latin_text = uyghur_model.predict(temp_path, device)
             arabic_text = latin_to_arabic(latin_text)
             
+            # 实例化转换器支持更多转换方向
+            ug_converter = UgMultiScriptConverter('ULS', 'UAS')
+            cyrillic_text = UgMultiScriptConverter('ULS', 'UCS')(latin_text)
+            
             result = {
                 'lang': 'ug',
                 'latin': latin_text,
-                'arabic': arabic_text
+                'arabic': arabic_text,
+                'cyrillic': cyrillic_text
             }
             
         elif language == 'zh':
